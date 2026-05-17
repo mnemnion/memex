@@ -1,0 +1,20 @@
+// Zig package metadata for memex
+.{
+    .name = .memex,
+
+    .version = "0.0.1",
+
+    .minimum_zig_version = "0.16.0",
+
+    .fingerprint = 0xad237d4f69b8bf2f,
+
+    .dependencies = .{},
+
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "LICENSE",
+        "README.md",
+    },
+}
