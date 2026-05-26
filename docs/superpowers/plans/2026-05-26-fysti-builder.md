@@ -1374,7 +1374,7 @@ git commit -m "test(fysti): Add Rust compatibility fixtures"
 - Modify: any `src/fysti*.zig` files with missing comments or style issues
 - Modify: `docs/superpowers/specs/2026-05-26-fysti-design.md` only if implementation reveals a design correction
 
-- [ ] **Step 1: Comment audit**
+- [x] **Step 1: Comment audit**
 
 Run:
 
@@ -1385,7 +1385,7 @@ rg -n "^(pub )?(const|var|fn|pub fn|pub const)|^[[:space:]]+[A-Za-z_][A-Za-z0-9_
 Expected: every function and every struct field has an immediately useful
 comment explaining what and why. Add missing comments before proceeding.
 
-- [ ] **Step 2: Default-value audit**
+- [x] **Step 2: Default-value audit**
 
 Run:
 
@@ -1396,7 +1396,7 @@ rg -n "= (null|false|true|0|\\.\\{|\\.empty)" src/fysti.zig src/fysti
 Expected: no struct field default values. Declaration literals at use sites are
 fine and expected.
 
-- [ ] **Step 3: OOM spelling audit**
+- [x] **Step 3: OOM spelling audit**
 
 Run:
 
@@ -1408,7 +1408,7 @@ Expected: allocator errors are introduced through `const OOM =
 std.mem.Allocator.Error;`. Public prose may mention OOM, but code should not
 spell allocator failures another way unless matching stdlib signatures.
 
-- [ ] **Step 4: Format Zig files**
+- [x] **Step 4: Format Zig files**
 
 Run:
 
@@ -1418,7 +1418,7 @@ zig fmt src/fysti.zig src/fysti/*.zig build.zig
 
 Expected: formatting completes without errors.
 
-- [ ] **Step 5: Run narrow fysti tests**
+- [x] **Step 5: Run narrow fysti tests**
 
 Run:
 
@@ -1428,7 +1428,7 @@ zig build -Dtest-filter=fysti test
 
 Expected: fysti-focused tests pass.
 
-- [ ] **Step 6: Run all tests**
+- [x] **Step 6: Run all tests**
 
 Run:
 
@@ -1438,7 +1438,7 @@ zig build test
 
 Expected: all tests pass.
 
-- [ ] **Step 7: Run compatibility helper**
+- [x] **Step 7: Run compatibility helper**
 
 Run:
 
@@ -1448,7 +1448,7 @@ cargo run --manifest-path tools/fysti-rust-fixtures/Cargo.toml -- check-zig
 
 Expected: Rust can open and query Zig-written v3 bytes.
 
-- [ ] **Step 8: Commit final cleanup**
+- [x] **Step 8: Commit final cleanup**
 
 ```bash
 git add build.zig src/fysti.zig src/fysti docs/superpowers/specs/2026-05-26-fysti-design.md

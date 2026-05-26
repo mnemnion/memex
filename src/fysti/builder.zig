@@ -461,13 +461,25 @@ fn rootAddress(built: []const u8) u64 {
 
 /// Test writer that can fail after accepting bytes so finish retry proves resume.
 const ControlledFailingWriter = struct {
+    /// Owned sink that records bytes accepted by the controlled writer.
     out: std.Io.Writer.Allocating,
+
+    /// Public writer facade passed to the builder under test.
     writer: std.Io.Writer,
+
+    /// Maximum bytes accepted by one drain call, forcing partial writes.
     max_chunk_len: usize,
+
+    /// Successful drain calls allowed before configured write failures begin.
     successful_drains_before_failure: usize,
+
+    /// Remaining drain failures to inject after the success budget is spent.
     write_failures_remaining: usize,
+
+    /// Remaining flush failures to inject after all bytes are accepted.
     flush_failures_remaining: usize,
 
+    /// Creates a writer that can inject partial writes, drain errors, and flush errors.
     fn init(
         allocator: std.mem.Allocator,
         max_chunk_len: usize,
@@ -492,14 +504,17 @@ const ControlledFailingWriter = struct {
         };
     }
 
+    /// Releases bytes accumulated by the controlled sink.
     fn deinit(controlled: *ControlledFailingWriter) void {
         controlled.out.deinit();
     }
 
+    /// Returns the bytes accepted so far by the controlled sink.
     fn written(controlled: *ControlledFailingWriter) []const u8 {
         return controlled.out.written();
     }
 
+    /// Accepts at most one chunk or injects a configured write failure.
     fn drain(w: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
         const controlled: *ControlledFailingWriter = @alignCast(@fieldParentPtr("writer", w));
         std.debug.assert(data.len == 1);
@@ -520,6 +535,7 @@ const ControlledFailingWriter = struct {
         return accepted;
     }
 
+    /// Flushes the owned sink or injects a configured flush failure.
     fn flush(w: *std.Io.Writer) std.Io.Writer.Error!void {
         const controlled: *ControlledFailingWriter = @alignCast(@fieldParentPtr("writer", w));
         if (controlled.flush_failures_remaining > 0) {

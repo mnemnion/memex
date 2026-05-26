@@ -49,10 +49,23 @@ const std = @import("std");
 /// Canonical spelling for allocator failures in this module family.
 const OOM = std.mem.Allocator.Error;
 
+/// Byte encoding helpers for fst v3.
 pub const bytes = @import("fysti/bytes.zig");
+
+/// Output algebra for supported fst value families.
 pub const output = @import("fysti/output.zig");
+
+/// CRC32C checksum helpers for fst trailers.
 pub const crc32 = @import("fysti/crc32.zig");
+
+/// Node and transition encoding for fst v3.
 pub const node = @import("fysti/node.zig");
+
+/// Bounded node registry used by the builder.
 pub const registry = @import("fysti/registry.zig");
+
+/// Public builder core for fst v3 bytes.
 pub const builder = @import("fysti/builder.zig");
+
+/// Public read view for fst v3 bytes.
 pub const fst = @import("fysti/fst.zig");
