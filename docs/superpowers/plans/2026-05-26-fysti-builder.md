@@ -43,7 +43,7 @@
 - Modify: `build.zig`
 - Modify: `src/fysti.zig`
 
-- [ ] **Step 1: Replace `src/fysti.zig` with the public skeleton**
+- [x] **Step 1: Replace `src/fysti.zig` with the public skeleton**
 
 ```zig
 //! fysti: a Zig implementation of BurntSushi fst format v3.
@@ -95,7 +95,7 @@ pub const fst = @import("fysti/fst.zig");
 
 ```
 
-- [ ] **Step 2: Create temporary stub modules so the test target compiles**
+- [x] **Step 2: Create temporary stub modules so the test target compiles**
 
 Create each file with the exact content shown.
 
@@ -192,7 +192,7 @@ const OOM = std.mem.Allocator.Error;
 //! Test fixtures shared by fysti tests.
 ```
 
-- [ ] **Step 3: Add fysti to `build.zig`**
+- [x] **Step 3: Add fysti to `build.zig`**
 
 Replace the module/test setup at the top of `build.zig` with:
 
@@ -241,7 +241,7 @@ Then update the coverage artifact reference from `module_unit_tests` to
     run_kcov.addArtifactArg(memex_unit_tests);
 ```
 
-- [ ] **Step 4: Run the fysti alias test**
+- [x] **Step 4: Run the fysti alias test**
 
 Run:
 
@@ -251,7 +251,7 @@ zig build -Dtest-filter="fysti public aliases" test
 
 Expected: the fysti test target runs and passes.
 
-- [ ] **Step 5: Run all tests**
+- [x] **Step 5: Run all tests**
 
 Run:
 
@@ -261,7 +261,7 @@ zig build test
 
 Expected: both memex and fysti test targets pass.
 
-- [ ] **Step 6: Commit module wiring**
+- [x] **Step 6: Commit module wiring**
 
 ```bash
 git add build.zig src/fysti.zig src/fysti
@@ -390,7 +390,7 @@ git commit -m "feat(fysti): Add byte encoding helpers"
 **Files:**
 - Modify: `src/fysti/output.zig`
 
-- [ ] **Step 1: Replace `output.zig` with tests and implementation**
+- [x] **Step 1: Replace `output.zig` with tests and implementation**
 
 ```zig
 //! Output algebra for fst v3 map values.
@@ -460,7 +460,7 @@ const std = @import("std");
 const OOM = std.mem.Allocator.Error;
 ```
 
-- [ ] **Step 2: Run output tests**
+- [x] **Step 2: Run output tests**
 
 Run:
 
@@ -470,7 +470,7 @@ zig build -Dtest-filter=output test
 
 Expected: output tests pass.
 
-- [ ] **Step 3: Run all tests**
+- [x] **Step 3: Run all tests**
 
 Run:
 
@@ -480,7 +480,7 @@ zig build test
 
 Expected: all tests pass.
 
-- [ ] **Step 4: Commit output algebra**
+- [x] **Step 4: Commit output algebra**
 
 ```bash
 git add src/fysti/output.zig
@@ -564,7 +564,7 @@ git commit -m "feat(fysti): Add checksum masking"
 - Modify: `src/fysti/node.zig`
 - Modify: `src/fysti/test_fixtures.zig`
 
-- [ ] **Step 1: Add transition and node types**
+- [x] **Step 1: Add transition and node types**
 
 Implement `Transition`, `CompiledNode`, and the node constants. Every field gets
 a comment. Use declaration literals in tests and construction.
@@ -624,7 +624,7 @@ const bytes = @import("bytes.zig");
 const output = @import("output.zig");
 ```
 
-- [ ] **Step 2: Add minimal encode/decode functions**
+- [x] **Step 2: Add minimal encode/decode functions**
 
 Start with `EmptyFinal`, `OneTransNext`, and `OneTrans`. Leave `AnyTrans` for
 Task 6 so this task stays reviewable.
@@ -684,7 +684,7 @@ pub fn encodeSimple(
 }
 ```
 
-- [ ] **Step 3: Add focused tests**
+- [x] **Step 3: Add focused tests**
 
 Add tests that prove empty and one-transition encodings are stable enough to
 iterate on. If upstream line refs are needed, start from
@@ -725,7 +725,7 @@ test "one transition next omits delta and output" {
 }
 ```
 
-- [ ] **Step 4: Run node tests**
+- [x] **Step 4: Run node tests**
 
 Run:
 
@@ -736,7 +736,7 @@ zig build -Dtest-filter="empty final" test
 
 Expected: both filtered tests pass.
 
-- [ ] **Step 5: Run all tests**
+- [x] **Step 5: Run all tests**
 
 Run:
 
@@ -746,7 +746,7 @@ zig build test
 
 Expected: all tests pass.
 
-- [ ] **Step 6: Commit simple node encoding**
+- [x] **Step 6: Commit simple node encoding**
 
 ```bash
 git add src/fysti/node.zig src/fysti/test_fixtures.zig
@@ -759,7 +759,7 @@ git commit -m "feat(fysti): Add simple node encoding"
 - Modify: `src/fysti/node.zig`
 - Modify: `docs/inventory/fysti-upstream-fst.md` only if a source-reference correction is discovered
 
-- [ ] **Step 1: Read the upstream node format**
+- [x] **Step 1: Read the upstream node format**
 
 Inspect:
 
@@ -771,7 +771,7 @@ sed -n '806,860p' /private/tmp/codex-project-state/memex/fysti/fst/src/raw/node.
 Expected: confirm `AnyTrans` field order, transition-index threshold, pack-size
 nibble layout, common-input encoding, and delta semantics.
 
-- [ ] **Step 2: Implement AnyTrans pack-size and transition-index helpers**
+- [x] **Step 2: Implement AnyTrans pack-size and transition-index helpers**
 
 Add helpers with comments:
 
@@ -804,24 +804,25 @@ pub const PackSizes = struct {
 };
 ```
 
-- [ ] **Step 3: Replace `encodeSimple` with `encode`**
+- [x] **Step 3: Replace `encodeSimple` with `encode`**
 
 Rename `encodeSimple` to `encode`, route one-transition cases through existing
 logic, and implement `AnyTrans` for two or more transitions. Keep transition
 inputs sorted and assert sortedness before serializing.
 
-The resulting signature:
+The source-correct signature keeps both address roles:
 
 ```zig
 /// Encodes a builder-side node into fst v3 node bytes.
 pub fn encode(
     allocator: std.mem.Allocator,
     node: UnfinishedNode,
-    next_addr: u64,
+    node_start_addr: u64,
+    last_addr: u64,
 ) OOM![]u8
 ```
 
-- [ ] **Step 4: Add decode view sufficient for exact lookup**
+- [x] **Step 4: Add decode view sufficient for exact lookup**
 
 Implement a borrowed `Node` view over serialized data with this completed public
 shape:
@@ -855,7 +856,7 @@ pub const Node = struct {
 `findInput` uses the direct transition index when present and falls back to
 linear search for small nodes.
 
-- [ ] **Step 5: Add encode/decode round-trip tests**
+- [x] **Step 5: Add encode/decode round-trip tests**
 
 Add tests for:
 
@@ -866,7 +867,7 @@ Add tests for:
 
 Use declaration literals for all values.
 
-- [ ] **Step 6: Run node tests**
+- [x] **Step 6: Run node tests**
 
 Run:
 
@@ -877,7 +878,7 @@ zig build -Dtest-filter=OneTrans test
 
 Expected: all node encode/decode tests pass.
 
-- [ ] **Step 7: Run all tests**
+- [x] **Step 7: Run all tests**
 
 Run:
 
@@ -887,7 +888,7 @@ zig build test
 
 Expected: all tests pass.
 
-- [ ] **Step 8: Commit complete node support**
+- [x] **Step 8: Commit complete node support**
 
 ```bash
 git add src/fysti/node.zig docs/inventory/fysti-upstream-fst.md
@@ -902,7 +903,7 @@ If `docs/inventory/fysti-upstream-fst.md` was not changed, omit it from
 **Files:**
 - Modify: `src/fysti/registry.zig`
 
-- [ ] **Step 1: Replace `registry.zig` with implementation and tests**
+- [x] **Step 1: Replace `registry.zig` with implementation and tests**
 
 Use upstream as the source map:
 `/private/tmp/codex-project-state/memex/fysti/fst/src/raw/registry.rs:29`.
@@ -961,7 +962,7 @@ const std = @import("std");
 const OOM = std.mem.Allocator.Error;
 ```
 
-- [ ] **Step 2: Add registry tests**
+- [x] **Step 2: Add registry tests**
 
 Tests must prove:
 
@@ -969,7 +970,7 @@ Tests must prove:
 - different bytes do not collide semantically even when hashes share a bucket;
 - entries beyond `entries_per_bucket` are evicted.
 
-- [ ] **Step 3: Run registry tests**
+- [x] **Step 3: Run registry tests**
 
 Run:
 
@@ -979,7 +980,7 @@ zig build -Dtest-filter=Registry test
 
 Expected: registry tests pass.
 
-- [ ] **Step 4: Run all tests**
+- [x] **Step 4: Run all tests**
 
 Run:
 
@@ -989,7 +990,7 @@ zig build test
 
 Expected: all tests pass.
 
-- [ ] **Step 5: Commit registry**
+- [x] **Step 5: Commit registry**
 
 ```bash
 git add src/fysti/registry.zig
@@ -1003,7 +1004,7 @@ git commit -m "feat(fysti): Add node registry"
 - Modify: `src/fysti/node.zig`
 - Modify: `src/fysti/crc32.zig`
 
-- [ ] **Step 1: Replace the builder stub with real state**
+- [x] **Step 1: Replace the builder stub with real state**
 
 The builder must store:
 
@@ -1018,7 +1019,7 @@ The builder must store:
 
 Every field needs a what/why comment.
 
-- [ ] **Step 2: Implement initialization and deinitialization**
+- [x] **Step 2: Implement initialization and deinitialization**
 
 Use explicit declaration literals. Do not add default field values to structs.
 
@@ -1056,7 +1057,7 @@ Call sites use:
 .{ .bucket_count = 10_000, .entries_per_bucket = 2 }
 ```
 
-- [ ] **Step 3: Implement `insert`**
+- [x] **Step 3: Implement `insert`**
 
 Required shape:
 
@@ -1082,7 +1083,7 @@ Rules:
 - common-prefix and output factoring follow upstream `raw/build.rs:390` and `raw/build.rs:399`;
 - compile closed suffixes before appending new suffix nodes.
 
-- [ ] **Step 4: Implement suffix compilation and node reuse**
+- [x] **Step 4: Implement suffix compilation and node reuse**
 
 Required helper shapes:
 
@@ -1110,7 +1111,7 @@ fn compileNode(
 - compute address as last-byte index;
 - record in registry.
 
-- [ ] **Step 5: Implement `finish`**
+- [x] **Step 5: Implement `finish`**
 
 Required shape:
 
@@ -1135,7 +1136,7 @@ The first implementation keeps emitted bytes in `buffer` until `finish`, because
 the checksum is over the entire file prefix. Do not add a tee writer in this
 milestone.
 
-- [ ] **Step 6: Add builder tests**
+- [x] **Step 6: Add builder tests**
 
 Tests:
 
@@ -1146,7 +1147,7 @@ Tests:
 - unsorted key returns `error.InputNotSorted`;
 - map insert with increasing values builds without output overflow.
 
-- [ ] **Step 7: Run builder tests**
+- [x] **Step 7: Run builder tests**
 
 Run:
 
@@ -1156,7 +1157,7 @@ zig build -Dtest-filter=Builder test
 
 Expected: builder tests pass.
 
-- [ ] **Step 8: Run all tests**
+- [x] **Step 8: Run all tests**
 
 Run:
 
@@ -1166,7 +1167,7 @@ zig build test
 
 Expected: all tests pass.
 
-- [ ] **Step 9: Commit builder core**
+- [x] **Step 9: Commit builder core**
 
 ```bash
 git add src/fysti/builder.zig src/fysti/node.zig src/fysti/crc32.zig
