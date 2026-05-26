@@ -41,7 +41,7 @@ pub const Registry = struct {
         };
     }
 
-    /// Releases all node bytes and bucket storage.
+    /// Releases all retained semantic nodes, transitions, and bucket storage.
     pub fn deinit(registry: *Registry, allocator: std.mem.Allocator) void {
         for (registry.buckets) |*bucket| {
             for (bucket.items) |entry| {

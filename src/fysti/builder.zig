@@ -48,7 +48,13 @@ pub fn Builder(comptime V: type) type {
         /// Address of the most recently serialized node for OneTransNext encoding.
         last_addr: u64,
 
-        /// Whether `finish` has already emitted bytes to the caller-owned writer.
+        /// Whether the root and trailer have been appended to `buffer`.
+        finalized: bool,
+
+        /// Number of final bytes already accepted by the caller-owned writer.
+        finish_written_len: usize,
+
+        /// Whether `finish` has successfully flushed the caller-owned writer.
         finished: bool,
 
         /// Initializes a builder and writes the v3 header into the internal buffer.
@@ -85,6 +91,8 @@ pub fn Builder(comptime V: type) type {
                 .registry = reg,
                 .len = 0,
                 .last_addr = node.none_address,
+                .finalized = false,
+                .finish_written_len = 0,
                 .finished = false,
             };
         }
@@ -109,6 +117,7 @@ pub fn Builder(comptime V: type) type {
             DuplicateKey,
         })!void {
             std.debug.assert(!builder.finished);
+            std.debug.assert(!builder.finalized);
 
             if (builder.len > 0) {
                 switch (std.mem.order(u8, key, builder.last_key.items)) {
@@ -136,20 +145,41 @@ pub fn Builder(comptime V: type) type {
                 return;
             }
 
+            if (!builder.finalized) {
+                try builder.finalize(allocator);
+            }
+            try builder.writeFinalBytes();
+            try builder.writer.flush();
+            builder.finished = true;
+        }
+
+        /// Completes internal bytes once; later finish retries only emit/flush.
+        fn finalize(
+            builder: *Self,
+            allocator: std.mem.Allocator,
+        ) (OOM || std.Io.Writer.Error)!void {
             try builder.compileFrom(allocator, 0);
             std.debug.assert(builder.unfinished.items.len == 1);
-            var root = builder.unfinished.pop().?;
-            defer root.node.deinit(allocator);
+            const root = &builder.unfinished.items[0];
             std.debug.assert(root.last == null);
 
             const root_addr = try builder.compileNode(allocator, root.node);
+            const trailer_start = builder.buffer.items.len;
+            errdefer builder.buffer.shrinkRetainingCapacity(trailer_start);
+
             try appendU64(allocator, &builder.buffer, builder.len);
             try appendU64(allocator, &builder.buffer, root_addr);
             try appendU32(allocator, &builder.buffer, crc32.checksum(builder.buffer.items));
 
-            try builder.writer.writeAll(builder.buffer.items);
-            try builder.writer.flush();
-            builder.finished = true;
+            builder.finalized = true;
+        }
+
+        /// Emits any final bytes that were not accepted by a prior finish attempt.
+        fn writeFinalBytes(builder: *Self) std.Io.Writer.Error!void {
+            while (builder.finish_written_len < builder.buffer.items.len) {
+                const written = try builder.writer.write(builder.buffer.items[builder.finish_written_len..]);
+                builder.finish_written_len += written;
+            }
         }
 
         /// Inserts `key` after sortedness has been checked and factors map output.
@@ -415,6 +445,82 @@ fn appendU32(allocator: std.mem.Allocator, buffer: *std.ArrayList(u8), value: u3
     try buffer.appendSlice(allocator, &raw);
 }
 
+/// Returns the root address stored in a complete v3 trailer.
+fn rootAddress(built: []const u8) u64 {
+    return bytes.readU64(built[built.len - 12 ..][0..8]);
+}
+
+/// Test writer that can fail after accepting bytes so finish retry proves resume.
+const ControlledFailingWriter = struct {
+    out: std.Io.Writer.Allocating,
+    writer: std.Io.Writer,
+    max_chunk_len: usize,
+    successful_drains_before_failure: usize,
+    write_failures_remaining: usize,
+    flush_failures_remaining: usize,
+
+    fn init(
+        allocator: std.mem.Allocator,
+        max_chunk_len: usize,
+        successful_drains_before_failure: usize,
+        write_failures_remaining: usize,
+        flush_failures_remaining: usize,
+    ) ControlledFailingWriter {
+        std.debug.assert(max_chunk_len > 0);
+        return .{
+            .out = std.Io.Writer.Allocating.init(allocator),
+            .writer = .{
+                .buffer = &.{},
+                .vtable = &.{
+                    .drain = drain,
+                    .flush = flush,
+                },
+            },
+            .max_chunk_len = max_chunk_len,
+            .successful_drains_before_failure = successful_drains_before_failure,
+            .write_failures_remaining = write_failures_remaining,
+            .flush_failures_remaining = flush_failures_remaining,
+        };
+    }
+
+    fn deinit(controlled: *ControlledFailingWriter) void {
+        controlled.out.deinit();
+    }
+
+    fn written(controlled: *ControlledFailingWriter) []const u8 {
+        return controlled.out.written();
+    }
+
+    fn drain(w: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
+        const controlled: *ControlledFailingWriter = @alignCast(@fieldParentPtr("writer", w));
+        std.debug.assert(data.len == 1);
+        std.debug.assert(splat == 1);
+
+        if (controlled.write_failures_remaining > 0 and
+            controlled.successful_drains_before_failure == 0)
+        {
+            controlled.write_failures_remaining -= 1;
+            return error.WriteFailed;
+        }
+
+        const accepted = @min(controlled.max_chunk_len, data[0].len);
+        try controlled.out.writer.writeAll(data[0][0..accepted]);
+        if (controlled.successful_drains_before_failure > 0) {
+            controlled.successful_drains_before_failure -= 1;
+        }
+        return accepted;
+    }
+
+    fn flush(w: *std.Io.Writer) std.Io.Writer.Error!void {
+        const controlled: *ControlledFailingWriter = @alignCast(@fieldParentPtr("writer", w));
+        if (controlled.flush_failures_remaining > 0) {
+            controlled.flush_failures_remaining -= 1;
+            return error.WriteFailed;
+        }
+        try controlled.out.writer.flush();
+    }
+};
+
 test "Builder empty set writes a valid v3 header and trailer" {
     var out = std.Io.Writer.Allocating.init(std.testing.allocator);
     defer out.deinit();
@@ -438,6 +544,62 @@ test "Builder empty set writes a valid v3 header and trailer" {
         bytes.readU32(built[built.len - 4 ..][0..4]),
         crc32.checksum(built[0 .. built.len - 4]),
     );
+}
+
+test "Builder empty set key can be built" {
+    var out = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer out.deinit();
+
+    var builder = try Builder(void).init(
+        std.testing.allocator,
+        &out.writer,
+        .unspecified,
+        .{ .bucket_count = 10_000, .entries_per_bucket = 2 },
+    );
+    defer builder.deinit(std.testing.allocator);
+
+    try builder.insert(std.testing.allocator, "", {});
+    try builder.finish(std.testing.allocator);
+
+    const built = out.written();
+    try std.testing.expectEqual(@as(u64, 1), bytes.readU64(built[built.len - 20 ..][0..8]));
+    try std.testing.expectEqual(node.empty_address, rootAddress(built));
+}
+
+test "Builder duplicate empty set key succeeds" {
+    var out = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer out.deinit();
+
+    var builder = try Builder(void).init(
+        std.testing.allocator,
+        &out.writer,
+        .unspecified,
+        .{ .bucket_count = 10_000, .entries_per_bucket = 2 },
+    );
+    defer builder.deinit(std.testing.allocator);
+
+    try builder.insert(std.testing.allocator, "", {});
+    try builder.insert(std.testing.allocator, "", {});
+    try builder.finish(std.testing.allocator);
+
+    const built = out.written();
+    try std.testing.expectEqual(@as(u64, 1), bytes.readU64(built[built.len - 20 ..][0..8]));
+}
+
+test "Builder duplicate empty map key returns DuplicateKey" {
+    var out = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer out.deinit();
+
+    var builder = try Builder(u64).init(
+        std.testing.allocator,
+        &out.writer,
+        .unspecified,
+        .{ .bucket_count = 10_000, .entries_per_bucket = 2 },
+    );
+    defer builder.deinit(std.testing.allocator);
+
+    try builder.insert(std.testing.allocator, "", 1);
+    try std.testing.expectError(error.DuplicateKey, builder.insert(std.testing.allocator, "", 2));
 }
 
 test "Builder single-key set can be built" {
@@ -531,6 +693,102 @@ test "Builder map insert with increasing values builds without output overflow" 
 
     const built = out.written();
     try std.testing.expectEqual(@as(u64, 3), bytes.readU64(built[built.len - 20 ..][0..8]));
+}
+
+test "Builder finish retry resumes after recoverable write failure" {
+    var controlled = ControlledFailingWriter.init(std.testing.allocator, 7, 1, 1, 0);
+    defer controlled.deinit();
+
+    var builder = try Builder(void).init(
+        std.testing.allocator,
+        &controlled.writer,
+        .unspecified,
+        .{ .bucket_count = 10_000, .entries_per_bucket = 2 },
+    );
+    defer builder.deinit(std.testing.allocator);
+
+    try builder.insert(std.testing.allocator, "abc", {});
+    try builder.insert(std.testing.allocator, "xbc", {});
+
+    try std.testing.expectError(error.WriteFailed, builder.finish(std.testing.allocator));
+    try std.testing.expect(builder.finalized);
+    try std.testing.expect(!builder.finished);
+    try std.testing.expectEqual(controlled.written().len, builder.finish_written_len);
+
+    try builder.finish(std.testing.allocator);
+    try std.testing.expect(builder.finished);
+
+    var reference = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer reference.deinit();
+    var reference_builder = try Builder(void).init(
+        std.testing.allocator,
+        &reference.writer,
+        .unspecified,
+        .{ .bucket_count = 10_000, .entries_per_bucket = 2 },
+    );
+    defer reference_builder.deinit(std.testing.allocator);
+    try reference_builder.insert(std.testing.allocator, "abc", {});
+    try reference_builder.insert(std.testing.allocator, "xbc", {});
+    try reference_builder.finish(std.testing.allocator);
+
+    try std.testing.expectEqualSlices(u8, reference.written(), controlled.written());
+}
+
+test "Builder finish retry only flushes after recoverable flush failure" {
+    var controlled = ControlledFailingWriter.init(std.testing.allocator, 4096, 4096, 0, 1);
+    defer controlled.deinit();
+
+    var builder = try Builder(void).init(
+        std.testing.allocator,
+        &controlled.writer,
+        .unspecified,
+        .{ .bucket_count = 10_000, .entries_per_bucket = 2 },
+    );
+    defer builder.deinit(std.testing.allocator);
+
+    try builder.insert(std.testing.allocator, "abc", {});
+    try builder.insert(std.testing.allocator, "xbc", {});
+
+    try std.testing.expectError(error.WriteFailed, builder.finish(std.testing.allocator));
+    try std.testing.expect(builder.finalized);
+    try std.testing.expect(!builder.finished);
+    try std.testing.expectEqual(builder.buffer.items.len, builder.finish_written_len);
+    const len_after_failed_flush = controlled.written().len;
+
+    try builder.finish(std.testing.allocator);
+    try std.testing.expect(builder.finished);
+    try std.testing.expectEqual(len_after_failed_flush, controlled.written().len);
+}
+
+test "Builder reuses equivalent address-sensitive suffix nodes semantically" {
+    var out = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer out.deinit();
+
+    var builder = try Builder(void).init(
+        std.testing.allocator,
+        &out.writer,
+        .unspecified,
+        .{ .bucket_count = 10_000, .entries_per_bucket = 2 },
+    );
+    defer builder.deinit(std.testing.allocator);
+
+    try builder.insert(std.testing.allocator, "abc", {});
+    try builder.insert(std.testing.allocator, "xbc", {});
+    try builder.finish(std.testing.allocator);
+
+    const built = out.written();
+    const root = node.Node.init(built, rootAddress(built));
+    try std.testing.expectEqual(@as(usize, 2), root.transitionCount());
+
+    const first = root.transition(0);
+    const second = root.transition(1);
+    try std.testing.expectEqual(@as(u8, 'a'), first.input);
+    try std.testing.expectEqual(@as(u8, 'x'), second.input);
+    try std.testing.expectEqual(first.addr, second.addr);
+
+    const shared = node.Node.init(built, first.addr);
+    try std.testing.expectEqual(@as(usize, 1), shared.transitionCount());
+    try std.testing.expectEqual(@as(u8, 'b'), shared.transition(0).input);
 }
 
 const std = @import("std");
