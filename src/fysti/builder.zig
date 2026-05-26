@@ -48,8 +48,11 @@ pub fn Builder(comptime V: type) type {
         /// Address of the most recently serialized node for OneTransNext encoding.
         last_addr: u64,
 
-        /// Whether the root and trailer have been appended to `buffer`.
+        /// Whether root/trailer finalization succeeded; finish may still retry writer output.
         finalized: bool,
+
+        /// Whether finalization failed after mutating graph state; insert/finish may not continue.
+        finalize_failed: bool,
 
         /// Number of final bytes already accepted by the caller-owned writer.
         finish_written_len: usize,
@@ -92,6 +95,7 @@ pub fn Builder(comptime V: type) type {
                 .len = 0,
                 .last_addr = node.none_address,
                 .finalized = false,
+                .finalize_failed = false,
                 .finish_written_len = 0,
                 .finished = false,
             };
@@ -118,6 +122,7 @@ pub fn Builder(comptime V: type) type {
         })!void {
             std.debug.assert(!builder.finished);
             std.debug.assert(!builder.finalized);
+            std.debug.assert(!builder.finalize_failed);
 
             if (builder.len > 0) {
                 switch (std.mem.order(u8, key, builder.last_key.items)) {
@@ -141,6 +146,8 @@ pub fn Builder(comptime V: type) type {
             builder: *Self,
             allocator: std.mem.Allocator,
         ) (OOM || std.Io.Writer.Error)!void {
+            std.debug.assert(!builder.finalize_failed);
+
             if (builder.finished) {
                 return;
             }
@@ -158,6 +165,8 @@ pub fn Builder(comptime V: type) type {
             builder: *Self,
             allocator: std.mem.Allocator,
         ) (OOM || std.Io.Writer.Error)!void {
+            errdefer builder.finalize_failed = true;
+
             try builder.compileFrom(allocator, 0);
             std.debug.assert(builder.unfinished.items.len == 1);
             const root = &builder.unfinished.items[0];
@@ -758,6 +767,30 @@ test "Builder finish retry only flushes after recoverable flush failure" {
     try builder.finish(std.testing.allocator);
     try std.testing.expect(builder.finished);
     try std.testing.expectEqual(len_after_failed_flush, controlled.written().len);
+}
+
+test "Builder finalization allocation failure marks builder terminal" {
+    var out = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer out.deinit();
+
+    var builder = try Builder(void).init(
+        std.testing.allocator,
+        &out.writer,
+        .unspecified,
+        .{ .bucket_count = 10_000, .entries_per_bucket = 2 },
+    );
+    defer builder.deinit(std.testing.allocator);
+
+    try builder.insert(std.testing.allocator, "abc", {});
+    try builder.insert(std.testing.allocator, "xbc", {});
+
+    var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{
+        .fail_index = 0,
+    });
+    try std.testing.expectError(error.OutOfMemory, builder.finish(failing.allocator()));
+    try std.testing.expect(builder.finalize_failed);
+    try std.testing.expect(!builder.finalized);
+    try std.testing.expect(!builder.finished);
 }
 
 test "Builder reuses equivalent address-sensitive suffix nodes semantically" {
