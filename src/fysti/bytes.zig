@@ -23,13 +23,14 @@ pub fn writeU32(out: *[4]u8, value: u32) void {
 
 /// Returns the number of bytes required by fst's fixed-width integer packing.
 pub fn packSize(value: u64) u4 {
-    if (value == 0) return 0;
+    if (value < 1 << 8) return 1;
     const bits = 64 - @clz(value);
     return @intCast((bits + 7) / 8);
 }
 
 /// Writes the low `n` little-endian bytes of `value` into `out`.
 pub fn packUint(out: []u8, value: u64, n: u4) void {
+    std.debug.assert(n >= 1);
     std.debug.assert(n <= 8);
     std.debug.assert(out.len >= n);
 
@@ -40,6 +41,7 @@ pub fn packUint(out: []u8, value: u64, n: u4) void {
 
 /// Reads a fixed-width little-endian integer from `n` bytes.
 pub fn unpackUint(bytes: []const u8, n: u4) u64 {
+    std.debug.assert(n >= 1);
     std.debug.assert(n <= 8);
     std.debug.assert(bytes.len >= n);
 
@@ -61,7 +63,7 @@ test "fixed little-endian integers round trip" {
 }
 
 test "packed integers use fixed little-endian truncation" {
-    try std.testing.expectEqual(@as(u4, 0), packSize(0));
+    try std.testing.expectEqual(@as(u4, 1), packSize(0));
     try std.testing.expectEqual(@as(u4, 1), packSize(0xff));
     try std.testing.expectEqual(@as(u4, 2), packSize(0x0100));
     try std.testing.expectEqual(@as(u4, 8), packSize(std.math.maxInt(u64)));
