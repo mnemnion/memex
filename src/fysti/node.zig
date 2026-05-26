@@ -44,17 +44,18 @@ pub const CompiledNode = struct {
     address: u64,
 };
 
-/// Returns true when `node` is the implicit empty final node.
+/// Returns true when `addr` points at the implicit empty final node.
 pub fn isEmptyFinalAddress(addr: u64) bool {
     return addr == empty_address;
 }
 
-/// Encodes a node with no transitions or one transition using fst v3 cases.
+/// Encodes a node using the source roles for simple v3 cases.
+/// `node_start_addr` is the OneTrans delta base; `last_addr` enables OneTransNext.
 pub fn encodeSimple(
     allocator: std.mem.Allocator,
     node: UnfinishedNode,
-    previous_addr: u64,
-    next_addr: u64,
+    node_start_addr: u64,
+    last_addr: u64,
 ) OOM![]u8 {
     if (node.transitions.items.len == 0) {
         const final_output = node.final_output.?;
@@ -64,12 +65,12 @@ pub fn encodeSimple(
 
     if (node.transitions.items.len == 1) {
         const trans = node.transitions.items[0];
-        if (node.final_output == null and trans.out.value == 0 and trans.addr == next_addr) {
+        if (node.final_output == null and trans.out.value == 0 and trans.addr == last_addr) {
             return encodeOneTransNext(allocator, trans.input);
         }
 
         std.debug.assert(node.final_output == null);
-        return encodeOneTrans(allocator, previous_addr, trans);
+        return encodeOneTrans(allocator, node_start_addr, trans);
     }
 
     std.debug.assert(node.transitions.items.len <= 1);
@@ -202,7 +203,9 @@ test "empty final node encodes as the implicit final state" {
         .transitions = transitions,
     };
 
-    const encoded = try encodeSimple(std.testing.allocator, unfinished, 0, first_node_address);
+    const node_start_addr = first_node_address;
+    const last_addr = first_node_address;
+    const encoded = try encodeSimple(std.testing.allocator, unfinished, node_start_addr, last_addr);
     defer std.testing.allocator.free(encoded);
 
     try std.testing.expectEqualSlices(u8, test_fixtures.empty_final_node, encoded);
@@ -222,7 +225,9 @@ test "one transition next omits delta and output" {
         .transitions = transitions,
     };
 
-    const encoded = try encodeSimple(std.testing.allocator, unfinished, 0, 32);
+    const node_start_addr = 34;
+    const last_addr = 32;
+    const encoded = try encodeSimple(std.testing.allocator, unfinished, node_start_addr, last_addr);
     defer std.testing.allocator.free(encoded);
 
     try std.testing.expectEqualSlices(u8, test_fixtures.one_transition_next_a, encoded);
@@ -242,7 +247,9 @@ test "one transition encodes output and node-relative delta" {
         .transitions = transitions,
     };
 
-    const encoded = try encodeSimple(std.testing.allocator, unfinished, 40, 32);
+    const node_start_addr = 40;
+    const last_addr = 32;
+    const encoded = try encodeSimple(std.testing.allocator, unfinished, node_start_addr, last_addr);
     defer std.testing.allocator.free(encoded);
 
     try std.testing.expectEqualSlices(u8, test_fixtures.one_transition_z_output_delta, encoded);
