@@ -492,7 +492,7 @@ git commit -m "feat(fysti): Add output algebra"
 **Files:**
 - Modify: `src/fysti/crc32.zig`
 
-- [ ] **Step 1: Replace `crc32.zig` with tests and implementation**
+- [x] **Step 1: Replace `crc32.zig` with tests and implementation**
 
 ```zig
 //! CRC32C support for fst v3 trailers.
@@ -531,7 +531,7 @@ const std = @import("std");
 const OOM = std.mem.Allocator.Error;
 ```
 
-- [ ] **Step 2: Run CRC tests**
+- [x] **Step 2: Run CRC tests**
 
 Run:
 
@@ -541,7 +541,7 @@ zig build -Dtest-filter=checksum test
 
 Expected: checksum tests pass.
 
-- [ ] **Step 3: Run all tests**
+- [x] **Step 3: Run all tests**
 
 Run:
 
@@ -551,7 +551,7 @@ zig build test
 
 Expected: all tests pass.
 
-- [ ] **Step 4: Commit CRC support**
+- [x] **Step 4: Commit CRC support**
 
 ```bash
 git add src/fysti/crc32.zig
