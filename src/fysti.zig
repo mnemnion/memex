@@ -21,6 +21,18 @@ pub const SetBuilder = Builder(void);
 /// Map builder: emits v3 bytes with `u64` output factoring.
 pub const MapBuilder = Builder(u64);
 
+/// Serialized fst version implemented by fysti.
+pub const version = fst.version;
+
+/// Number of bytes in the v3 header.
+pub const header_len = fst.header_len;
+
+/// Number of bytes in the v3 trailer.
+pub const trailer_len = fst.trailer_len;
+
+/// Conventional v3 kind value shared by builders and readers.
+pub const Kind = fst.Kind;
+
 comptime {
     std.testing.refAllDecls(@This());
 }

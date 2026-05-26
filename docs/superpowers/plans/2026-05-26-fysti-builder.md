@@ -1181,7 +1181,7 @@ git commit -m "feat(fysti): Add builder core"
 - Modify: `src/fysti.zig`
 - Modify: `src/fysti/test_fixtures.zig`
 
-- [ ] **Step 1: Implement metadata parsing**
+- [x] **Step 1: Implement metadata parsing**
 
 Required constants:
 
@@ -1211,7 +1211,7 @@ Required fields for `Fst(V)`:
 - `root_addr < bytes.len`;
 - `kind` matches `V`.
 
-- [ ] **Step 2: Implement exact lookup**
+- [x] **Step 2: Implement exact lookup**
 
 Required public methods:
 
@@ -1226,7 +1226,7 @@ pub fn get(fst: Self, key: []const u8) ?u64
 For `Fst(void)`, `get` should not exist or should comptime-error with a clear
 message. For `Fst(u64)`, `contains` may call `get`.
 
-- [ ] **Step 3: Implement explicit checksum verification**
+- [x] **Step 3: Implement explicit checksum verification**
 
 Required method:
 
@@ -1237,7 +1237,7 @@ pub fn verify(fst: Self) error{InvalidChecksum}!void
 
 `verify()` is the only public malformed-data-style error in this milestone.
 
-- [ ] **Step 4: Add builder-to-reader tests**
+- [x] **Step 4: Add builder-to-reader tests**
 
 Tests:
 
@@ -1247,7 +1247,7 @@ Tests:
 - `Fst(void).get` fails at comptime if exposed accidentally;
 - `Fst(u64).contains` returns true for existing map key.
 
-- [ ] **Step 5: Run lookup tests**
+- [x] **Step 5: Run lookup tests**
 
 Run:
 
@@ -1258,7 +1258,7 @@ zig build -Dtest-filter=verify test
 
 Expected: lookup and verification tests pass.
 
-- [ ] **Step 6: Run all tests**
+- [x] **Step 6: Run all tests**
 
 Run:
 
@@ -1268,7 +1268,7 @@ zig build test
 
 Expected: all tests pass.
 
-- [ ] **Step 7: Commit read view**
+- [x] **Step 7: Commit read view**
 
 ```bash
 git add src/fysti/fst.zig src/fysti.zig src/fysti/test_fixtures.zig
