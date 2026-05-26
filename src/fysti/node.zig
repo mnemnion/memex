@@ -103,6 +103,14 @@ pub const Node = struct {
         };
     }
 
+    /// Returns this node's terminal output, or zero when absent.
+    pub fn finalOutput(node: Node) output.Output {
+        return switch (node.stateKind()) {
+            .empty_final, .one_trans_next, .one_trans => output.Output.zero(),
+            .any_trans => node.anyFinalOutput(),
+        };
+    }
+
     /// Returns the number of outgoing transitions.
     pub fn transitionCount(node: Node) usize {
         return switch (node.stateKind()) {
@@ -270,6 +278,17 @@ pub const Node = struct {
         return unpackOutput(node.data[at..], sizes.out);
     }
 
+    /// Returns the optional final output stored in an AnyTrans node.
+    fn anyFinalOutput(node: Node) output.Output {
+        const sizes = node.anySizes();
+        if (!node.isFinal() or sizes.out == 0) {
+            return output.Output.zero();
+        }
+        const ntrans = node.anyTransitionCount();
+        const at: usize = @intCast(node.anyStart(sizes, ntrans));
+        return unpackOutput(node.data[at..], sizes.out);
+    }
+
     /// Returns the target address for an AnyTrans transition index.
     fn anyTransitionAddress(node: Node, index: usize, sizes: PackSizes, ntrans: usize) u64 {
         std.debug.assert(index < ntrans);
@@ -325,9 +344,12 @@ pub fn encode(
     last_addr: u64,
 ) OOM![]u8 {
     if (node.transitions.items.len == 0) {
-        const final_output = node.final_output.?;
-        std.debug.assert(final_output.value == 0);
-        return allocator.dupe(u8, &.{});
+        if (node.final_output) |final_output| {
+            if (final_output.value == 0) {
+                return allocator.dupe(u8, &.{});
+            }
+        }
+        return encodeAnyTrans(allocator, node, node_start_addr);
     }
 
     if (node.transitions.items.len == 1) {
@@ -472,6 +494,9 @@ fn encodeAnyTrans(allocator: std.mem.Allocator, node: UnfinishedNode, node_addr:
 
 /// Asserts that transition inputs are strictly sorted in lexicographic order.
 fn assertSortedTransitions(transitions: []const Transition) void {
+    if (transitions.len < 2) {
+        return;
+    }
     for (transitions[1..], 1..) |trans, index| {
         std.debug.assert(transitions[index - 1].input < trans.input);
     }
@@ -830,6 +855,7 @@ test "AnyTrans two transitions encode decode round trip" {
 
     const node = Node.init(installed.data, installed.addr);
     try std.testing.expect(node.isFinal());
+    try std.testing.expectEqual(@as(u64, 3), node.finalOutput().value);
     try std.testing.expectEqual(@as(usize, 2), node.transitionCount());
     try std.testing.expectEqual(Transition{
         .input = 'a',
@@ -847,6 +873,31 @@ test "AnyTrans two transitions encode decode round trip" {
         .addr = 80,
     }, node.findInput('z').?);
     try std.testing.expectEqual(@as(?Transition, null), node.findInput('b'));
+}
+
+test "AnyTrans final leaf output encode decode round trip" {
+    const transitions: std.ArrayList(Transition) = .empty;
+    const unfinished: UnfinishedNode = .{
+        .final_output = .{ .value = 42 },
+        .transitions = transitions,
+    };
+
+    const node_start_addr = first_node_address;
+    const encoded = try encode(std.testing.allocator, unfinished, node_start_addr, first_node_address);
+    defer std.testing.allocator.free(encoded);
+
+    try std.testing.expectEqualSlices(u8, &.{
+        42, 0x01, 0, 0b0100_0000,
+    }, encoded);
+
+    const installed = try installNodeBytes(std.testing.allocator, encoded, node_start_addr);
+    defer std.testing.allocator.free(installed.data);
+
+    const node = Node.init(installed.data, installed.addr);
+    try std.testing.expect(node.isFinal());
+    try std.testing.expectEqual(@as(u64, 42), node.finalOutput().value);
+    try std.testing.expectEqual(@as(usize, 0), node.transitionCount());
+    try std.testing.expectEqual(@as(?Transition, null), node.findInput('a'));
 }
 
 test "AnyTrans 33 transitions encode decode round trip with transition index" {
@@ -870,6 +921,11 @@ test "AnyTrans 33 transitions encode decode round trip with transition index" {
     defer std.testing.allocator.free(encoded);
 
     try std.testing.expectEqual(@as(usize, 357), encoded.len);
+    const index_start = (33 * 2) + 33;
+    try std.testing.expectEqual(@as(u8, 0), encoded[index_start]);
+    try std.testing.expectEqual(@as(u8, 17), encoded[index_start + 17]);
+    try std.testing.expectEqual(@as(u8, 32), encoded[index_start + 32]);
+    try std.testing.expectEqual(@as(u8, 255), encoded[index_start + 200]);
     try std.testing.expectEqual(@as(u8, 0x20), encoded[encoded.len - 2]);
     try std.testing.expectEqual(@as(u8, 0b0010_0001), encoded[encoded.len - 1]);
 
