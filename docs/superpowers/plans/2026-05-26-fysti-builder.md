@@ -1283,7 +1283,7 @@ git commit -m "feat(fysti): Add exact lookup"
 - Create: `tools/fysti-rust-fixtures/src/main.rs`
 - Modify: `src/fysti/test_fixtures.zig`
 
-- [ ] **Step 1: Create a local fixture helper crate**
+- [x] **Step 1: Create a local fixture helper crate**
 
 The helper crate must depend on the local upstream checkout by path, not by a
 network fetch. `Cargo.toml`:
@@ -1299,7 +1299,7 @@ publish = false
 fst = { path = "/private/tmp/codex-project-state/memex/fysti/fst" }
 ```
 
-- [ ] **Step 2: Add fixture generator**
+- [x] **Step 2: Add fixture generator**
 
 `src/main.rs` should:
 
@@ -1307,7 +1307,7 @@ fst = { path = "/private/tmp/codex-project-state/memex/fysti/fst" }
 - build a map with `[("a", 1), ("ab", 3), ("b", 10)]`;
 - write byte arrays as Zig declarations to stdout.
 
-- [ ] **Step 3: Generate fixture output**
+- [x] **Step 3: Generate fixture output**
 
 Run:
 
@@ -1320,12 +1320,12 @@ Expected: stdout contains Zig byte arrays for set and map fixtures.
 Cargo must resolve the `fst` dependency from the local upstream clone. A network
 fetch means the manifest is wrong.
 
-- [ ] **Step 4: Copy generated fixture arrays into `test_fixtures.zig`**
+- [x] **Step 4: Copy generated fixture arrays into `test_fixtures.zig`**
 
 Add comments naming the upstream revision and command used. Do not check in the
 upstream Rust repository.
 
-- [ ] **Step 5: Add Zig tests for Rust-written bytes**
+- [x] **Step 5: Add Zig tests for Rust-written bytes**
 
 Tests:
 
@@ -1334,13 +1334,13 @@ Tests:
 - `Map.init(rust_map_fixture).verify()` passes;
 - map returns `1`, `3`, and `10`.
 
-- [ ] **Step 6: Add Rust check for Zig-written bytes**
+- [x] **Step 6: Add Rust check for Zig-written bytes**
 
 Use the helper crate to read a Zig-generated fixture file written by a small
 temporary Zig test or command. The check must prove Rust `fst` can open and
 query bytes written by `Builder(void)` and `Builder(u64)`.
 
-- [ ] **Step 7: Run compatibility checks**
+- [x] **Step 7: Run compatibility checks**
 
 Run:
 
@@ -1351,7 +1351,7 @@ cargo run --manifest-path tools/fysti-rust-fixtures/Cargo.toml -- check-zig
 
 Expected: Zig reads Rust-written fixtures and Rust reads Zig-written fixtures.
 
-- [ ] **Step 8: Run all tests**
+- [x] **Step 8: Run all tests**
 
 Run:
 
@@ -1361,7 +1361,7 @@ zig build test
 
 Expected: all Zig tests pass.
 
-- [ ] **Step 9: Commit compatibility fixtures**
+- [x] **Step 9: Commit compatibility fixtures**
 
 ```bash
 git add tools/fysti-rust-fixtures src/fysti/test_fixtures.zig
