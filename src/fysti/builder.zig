@@ -66,7 +66,7 @@ pub fn Builder(comptime V: type) type {
             writer: *std.Io.Writer,
             kind: Kind,
             registry_config: RegistryConfig,
-        ) (OOM || std.Io.Writer.Error)!Self {
+        ) OOM!Self {
             var buffer: std.ArrayList(u8) = .empty;
             errdefer buffer.deinit(allocator);
             try appendU64(allocator, &buffer, version);
@@ -79,12 +79,12 @@ pub fn Builder(comptime V: type) type {
             errdefer deinitUnfinishedList(&unfinished, allocator);
             try unfinished.append(allocator, initUnfinished(false));
 
-            var reg = try registry.Registry.init(
+            const reg = try registry.Registry.init(
                 allocator,
                 registry_config.bucket_count,
                 registry_config.entries_per_bucket,
             );
-            errdefer reg.deinit(allocator);
+            errdefer comptime unreachable;
 
             return .{
                 .writer = writer,
@@ -263,7 +263,12 @@ pub fn Builder(comptime V: type) type {
             }
 
             const node_start_addr: u64 = @intCast(builder.buffer.items.len);
-            const encoded = try node.encode(allocator, unfinished, node_start_addr, builder.last_addr);
+            const encoded = try node.encode(
+                allocator,
+                unfinished,
+                node_start_addr,
+                builder.last_addr,
+            );
             defer allocator.free(encoded);
 
             try builder.buffer.appendSlice(allocator, encoded);
@@ -463,19 +468,14 @@ fn rootAddress(built: []const u8) u64 {
 const ControlledFailingWriter = struct {
     /// Owned sink that records bytes accepted by the controlled writer.
     out: std.Io.Writer.Allocating,
-
     /// Public writer facade passed to the builder under test.
     writer: std.Io.Writer,
-
     /// Maximum bytes accepted by one drain call, forcing partial writes.
     max_chunk_len: usize,
-
     /// Successful drain calls allowed before configured write failures begin.
     successful_drains_before_failure: usize,
-
     /// Remaining drain failures to inject after the success budget is spent.
     write_failures_remaining: usize,
-
     /// Remaining flush failures to inject after all bytes are accepted.
     flush_failures_remaining: usize,
 

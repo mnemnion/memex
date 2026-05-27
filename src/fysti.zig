@@ -1,4 +1,5 @@
 //! fysti: a Zig implementation of BurntSushi fst format v3.
+
 /// Returns a v3 read view for the supported value family `V`.
 pub fn Fst(comptime V: type) type {
     return fst.Fst(V);
@@ -45,9 +46,6 @@ test "fysti public aliases use supported value families" {
 }
 
 const std = @import("std");
-
-/// Canonical spelling for allocator failures in this module family.
-const OOM = std.mem.Allocator.Error;
 
 /// Byte encoding helpers for fst v3.
 pub const bytes = @import("fysti/bytes.zig");
