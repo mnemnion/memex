@@ -1,6 +1,7 @@
 //! Color conversion between normalized sRGB and OKLCH.
 
-const std = @import("std");
+/// An sRGB byte triplet in `{ R, G, B }` order.
+pub const RgbTriple = struct { u8, u8, u8 };
 
 /// A gamma-encoded sRGB color with channels conventionally in `[0, 1]`.
 pub const Rgb = struct {
@@ -8,11 +9,55 @@ pub const Rgb = struct {
     g: f64,
     b: f64,
 
+    /// Convert an `{ R, G, B }` byte triplet to normalized sRGB.
+    pub fn fromTriple(triple: RgbTriple) Rgb {
+        return .{
+            .r = @as(f64, @floatFromInt(triple[0])) / 255.0,
+            .g = @as(f64, @floatFromInt(triple[1])) / 255.0,
+            .b = @as(f64, @floatFromInt(triple[2])) / 255.0,
+        };
+    }
+
+    /// Convert a packed `0xRRGGBB` value to normalized sRGB.
+    ///
+    /// Integer inputs must be `u24`/`i25` or wider. An `f64` input is also
+    /// accepted. Runtime values are asserted in safe builds to be integral
+    /// and within `0x000000...0xFFFFFF`.
+    pub fn fromPacked(value: anytype) Rgb {
+        return fromTriple(unpackRgb(packedValue(value)));
+    }
+
+    /// Convert normalized sRGB to an `{ R, G, B }` byte triplet.
+    ///
+    /// Channels are asserted in safe builds to be finite and within `[0, 1]`,
+    /// then rounded to the nearest byte.
+    pub fn toTriple(rgb: Rgb) RgbTriple {
+        return .{
+            channelToByte(rgb.r),
+            channelToByte(rgb.g),
+            channelToByte(rgb.b),
+        };
+    }
+
+    /// Convert normalized sRGB to a packed `0xRRGGBB` value of type `T`.
+    ///
+    /// `T` must be `u24`/`i25` or a wider integer type, or `f64`.
+    pub fn toPacked(rgb: Rgb, comptime T: type) T {
+        assertPackedResultType(T);
+        const value = packRgb(rgb.toTriple());
+
+        return switch (@typeInfo(T)) {
+            .int => @intCast(value),
+            .float => @floatFromInt(value),
+            else => unreachable,
+        };
+    }
+
     /// Convert normalized, gamma-encoded sRGB to OKLCH.
     pub fn toOklch(rgb: Rgb) Oklch {
-        std.debug.assert(std.math.isFinite(rgb.r));
-        std.debug.assert(std.math.isFinite(rgb.g));
-        std.debug.assert(std.math.isFinite(rgb.b));
+        assert(std.math.isFinite(rgb.r));
+        assert(std.math.isFinite(rgb.g));
+        assert(std.math.isFinite(rgb.b));
 
         const linear = LinearRgb{
             .r = decodeSrgb(rgb.r),
@@ -36,9 +81,9 @@ pub const Oklch = struct {
     /// while reducing chroma; the final local clip may change them by less than
     /// one just-noticeable difference.
     pub fn toRgb(oklch: Oklch) Rgb {
-        std.debug.assert(std.math.isFinite(oklch.l));
-        std.debug.assert(std.math.isFinite(oklch.c));
-        std.debug.assert(std.math.isFinite(oklch.h));
+        assert(std.math.isFinite(oklch.l));
+        assert(std.math.isFinite(oklch.c));
+        assert(std.math.isFinite(oklch.h));
 
         if (oklch.l >= 1.0) return .{ .r = 1.0, .g = 1.0, .b = 1.0 };
         if (oklch.l <= 0.0) return .{ .r = 0.0, .g = 0.0, .b = 0.0 };
@@ -172,6 +217,76 @@ const jnd: f64 = 0.02;
 const gamut_epsilon: f64 = 0.0001;
 const degrees_to_radians: f64 = std.math.pi / 180.0;
 const radians_to_degrees: f64 = 180.0 / std.math.pi;
+const packed_rgb_max = 0xFFFFFF;
+
+fn packedValue(value: anytype) u24 {
+    const T = @TypeOf(value);
+
+    return switch (@typeInfo(T)) {
+        .comptime_int => packedInteger(value),
+        .int => |int| blk: {
+            if (int.signedness == .unsigned and int.bits < 24) {
+                @compileError("packed RGB unsigned integers must be at least 24 bits");
+            }
+            if (int.signedness == .signed and int.bits < 25) {
+                @compileError("packed RGB signed integers must be at least 25 bits");
+            }
+            break :blk packedInteger(value);
+        },
+        .float => blk: {
+            if (T != f64) {
+                @compileError("packed RGB floating-point values must be f64");
+            }
+            assert(std.math.isFinite(value));
+            assert(value >= 0.0 and value <= packed_rgb_max);
+            assert(@trunc(value) == value);
+            break :blk @intFromFloat(value);
+        },
+        else => @compileError("packed RGB values must be an integer or f64"),
+    };
+}
+
+fn packedInteger(value: anytype) u24 {
+    assert(value >= 0 and value <= packed_rgb_max);
+    return @intCast(value);
+}
+
+fn assertPackedResultType(comptime T: type) void {
+    switch (@typeInfo(T)) {
+        .int => |int| {
+            if (int.signedness == .unsigned and int.bits < 24) {
+                @compileError("packed RGB unsigned result types must be at least 24 bits");
+            }
+            if (int.signedness == .signed and int.bits < 25) {
+                @compileError("packed RGB signed result types must be at least 25 bits");
+            }
+        },
+        .float => if (T != f64) {
+            @compileError("packed RGB floating-point result types must be f64");
+        },
+        else => @compileError("packed RGB result types must be an integer or f64"),
+    }
+}
+
+fn unpackRgb(value: u24) RgbTriple {
+    return .{
+        @intCast(value >> 16),
+        @intCast((value >> 8) & 0xFF),
+        @intCast(value & 0xFF),
+    };
+}
+
+fn packRgb(triple: RgbTriple) u24 {
+    return @as(u24, triple[0]) << 16 |
+        @as(u24, triple[1]) << 8 |
+        @as(u24, triple[2]);
+}
+
+fn channelToByte(channel: f64) u8 {
+    assert(std.math.isFinite(channel));
+    assert(channel >= 0.0 and channel <= 1.0);
+    return @intFromFloat(@round(channel * 255.0));
+}
 
 fn decodeSrgb(channel: f64) f64 {
     if (channel <= 0.04045) return channel / 12.92;
@@ -194,6 +309,49 @@ fn expectRgbApprox(expected: Rgb, actual: Rgb, tolerance: f64) !void {
     try std.testing.expectApproxEqAbs(expected.r, actual.r, tolerance);
     try std.testing.expectApproxEqAbs(expected.g, actual.g, tolerance);
     try std.testing.expectApproxEqAbs(expected.b, actual.b, tolerance);
+}
+
+test "RGB byte triplets convert in channel order" {
+    const triple = RgbTriple{ 0x12, 0x80, 0xFE };
+    const rgb = Rgb.fromTriple(triple);
+
+    try std.testing.expectApproxEqAbs(18.0 / 255.0, rgb.r, 0.0000001);
+    try std.testing.expectApproxEqAbs(128.0 / 255.0, rgb.g, 0.0000001);
+    try std.testing.expectApproxEqAbs(254.0 / 255.0, rgb.b, 0.0000001);
+    try std.testing.expectEqual(triple, rgb.toTriple());
+}
+
+test "packed RGB integers convert in 0xRRGGBB order" {
+    const expected = RgbTriple{ 0x12, 0x34, 0x56 };
+
+    try std.testing.expectEqual(expected, Rgb.fromPacked(0x123456).toTriple());
+    try std.testing.expectEqual(expected, Rgb.fromPacked(@as(u24, 0x123456)).toTriple());
+    try std.testing.expectEqual(expected, Rgb.fromPacked(@as(u64, 0x123456)).toTriple());
+    try std.testing.expectEqual(expected, Rgb.fromPacked(@as(i25, 0x123456)).toTriple());
+    try std.testing.expectEqual(expected, Rgb.fromPacked(@as(i64, 0x123456)).toTriple());
+
+    const rgb = Rgb.fromTriple(expected);
+    try std.testing.expectEqual(@as(u24, 0x123456), rgb.toPacked(u24));
+    try std.testing.expectEqual(@as(u64, 0x123456), rgb.toPacked(u64));
+    try std.testing.expectEqual(@as(i25, 0x123456), rgb.toPacked(i25));
+    try std.testing.expectEqual(@as(i64, 0x123456), rgb.toPacked(i64));
+}
+
+test "packed RGB f64 values must represent integers" {
+    const rgb = Rgb.fromPacked(@as(f64, 0xABCDEF));
+
+    try std.testing.expectEqual(RgbTriple{ 0xAB, 0xCD, 0xEF }, rgb.toTriple());
+    try std.testing.expectEqual(@as(f64, 0xABCDEF), rgb.toPacked(f64));
+}
+
+test "normalized RGB channels round to the nearest byte" {
+    const rgb = Rgb{
+        .r = 0.0,
+        .g = 127.6 / 255.0,
+        .b = 1.0,
+    };
+
+    try std.testing.expectEqual(RgbTriple{ 0, 128, 255 }, rgb.toTriple());
 }
 
 test "sRGB primaries convert to OKLCH reference values" {
@@ -255,3 +413,6 @@ test "out-of-range OKLCH lightness maps to black or white" {
         0.0,
     );
 }
+
+const std = @import("std");
+const assert = std.debug.assert;
