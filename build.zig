@@ -18,6 +18,12 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const color_mod = b.addModule("color", .{
+        .root_source_file = b.path("src/color.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
     const test_filters = b.option(
         []const []const u8,
         "test-filter",
@@ -34,13 +40,20 @@ pub fn build(b: *std.Build) void {
         .filters = test_filters,
     });
 
+    const color_unit_tests = b.addTest(.{
+        .root_module = color_mod,
+        .filters = test_filters,
+    });
+
     const run_memex_unit_tests = b.addRunArtifact(memex_unit_tests);
     const run_fysti_unit_tests = b.addRunArtifact(fysti_unit_tests);
+    const run_color_unit_tests = b.addRunArtifact(color_unit_tests);
 
     const test_step = b.step("test", "Run unit tests");
 
     test_step.dependOn(&run_memex_unit_tests.step);
     test_step.dependOn(&run_fysti_unit_tests.step);
+    test_step.dependOn(&run_color_unit_tests.step);
 
     const run_kcov = b.addSystemCommand(&.{
         "kcov",
