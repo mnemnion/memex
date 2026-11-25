@@ -13,7 +13,7 @@ pub fn unmask(masked: u32) u32 {
 
 /// Returns the masked CRC32C checksum stored in an fst v3 trailer.
 pub fn checksum(bytes: []const u8) u32 {
-    const Crc32c = std.hash.crc.Crc32Iscsi;
+    const Crc32c = std.hash.crc.@"CRC-32/ISCSI";
     var hasher = Crc32c.init();
     hasher.update(bytes);
     return mask(hasher.final());

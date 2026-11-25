@@ -45,7 +45,7 @@ pub fn unpackUint(bytes: []const u8, n: u4) u64 {
     std.debug.assert(n <= 8);
     std.debug.assert(bytes.len >= n);
 
-    var full: [8]u8 = .{0} ** 8;
+    var full: [8]u8 = @splat(0);
     @memcpy(full[0..n], bytes[0..n]);
     return readU64(&full);
 }
@@ -68,7 +68,7 @@ test "packed integers use fixed little-endian truncation" {
     try std.testing.expectEqual(@as(u4, 2), packSize(0x0100));
     try std.testing.expectEqual(@as(u4, 8), packSize(std.math.maxInt(u64)));
 
-    var buf: [8]u8 = .{0xaa} ** 8;
+    var buf: [8]u8 = @splat(0xaa);
     packUint(&buf, 0x0102_0304, 4);
     try std.testing.expectEqualSlices(u8, &.{ 0x04, 0x03, 0x02, 0x01 }, buf[0..4]);
     try std.testing.expectEqual(@as(u64, 0x0102_0304), unpackUint(&buf, 4));

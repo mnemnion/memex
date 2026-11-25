@@ -70,7 +70,7 @@ pub fn Builder(comptime V: type) type {
             var buffer: std.ArrayList(u8) = .empty;
             errdefer buffer.deinit(allocator);
             try appendU64(allocator, &buffer, version);
-            try appendU64(allocator, &buffer, @intFromEnum(kind));
+            try appendU64(allocator, &buffer, @backingInt(kind));
 
             var last_key: std.ArrayList(u8) = .empty;
             errdefer last_key.deinit(allocator);

@@ -179,8 +179,8 @@ fn verifyChecksum(data: []const u8, expected: u32) error{InvalidChecksum}!void {
 
 /// Converts a raw v3 header kind into the shared builder enum.
 fn readKind(raw: u64) Kind {
-    std.debug.assert(raw == @intFromEnum(Kind.unspecified));
-    return @enumFromInt(raw);
+    std.debug.assert(raw == @backingInt(Kind.unspecified));
+    return @fromBackingInt(@intCast(raw));
 }
 
 /// Checks that a header kind is compatible with the chosen value family.
